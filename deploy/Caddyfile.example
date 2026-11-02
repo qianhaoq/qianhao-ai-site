@@ -1,0 +1,14 @@
+# 目标域名 qianhao.ai；当前尚未切 DNS。
+# DNS 指向服务器且 80/443 端口可访问后，Caddy 可自动申请和续期 HTTPS 证书，
+# 并自动将 HTTP 重定向到 HTTPS。此文件仅为示例，尚未启动服务或申请证书。
+# 将静态文件放到 /var/www/qianhao.ai，或按实际部署路径修改 root。
+qianhao.ai {
+    root * /var/www/qianhao.ai
+    encode gzip
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+    file_server
+}
