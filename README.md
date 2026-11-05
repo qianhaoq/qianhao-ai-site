@@ -21,9 +21,15 @@ python3 -m http.server 8080
 ## 两条发布路径
 
 - [GitHub Pages 预览](https://qianhaoq.github.io/qianhao-ai-site/)随 `main` 更新自动构建。该版本的[部署运行](https://github.com/qianhaoq/qianhao-ai-site/actions/runs/41942199100)已成功。
-- 正式域名由独立的 Lightsail nginx 服务提供。Pages 成功不会同步正式服务器；本次通过现有 SSH 身份执行有备份和文件指纹校验的发布。仓库当前没有 GitHub Actions 到 Lightsail 的持续发布工作流。
+- 正式域名由独立的 Lightsail nginx 服务提供。Pages 成功不会同步正式服务器；本次通过现有 SSH 身份执行有备份和文件指纹校验的发布。[持续发布方案](deploy/AUTO_DEPLOY.md)采用服务器主动拉取公开 main，配合只读 GitHub 监测；当前为准备阶段，服务器常驻安装与启用待确认。
 
 今后发布时，从确认过的提交打包上述四个资源，核实生产当前版本，备份站点后再发布；样式先于首页替换。发布后从公网核对四个资源的状态码、哈希、canonical、手机布局和导航。本次只更新静态文件，沿用现有 DNS、证书及 nginx 配置，无需重启服务。
+
+## 持续发布准备
+
+发布程序固定精确 SHA、等待该 SHA 的 CI 通过、校验 Git blob 与公开页面指纹，并提供备份、崩溃恢复、回滚和失败通知。服务器只读取四个静态资源，不执行或自动更新远端脚本；无需 SSH/AWS/GitHub 持久凭证。新增 root service/timer 的权限边界、安装清单和验收要求见 [AUTO_DEPLOY.md](deploy/AUTO_DEPLOY.md)。该准备工作尚未改变正式站。
+
+样式链接增加 CSS 内容哈希作为缓存版本参数，避免旧缓存混入后续发布；静态资源仍无构建链。
 
 ## 本次回滚
 
