@@ -104,8 +104,8 @@ sudo systemctl start qianhao-site-deploy.service
 
 site-production-monitor.yml 在 main 上每十五分钟运行，也支持手动运行。它固定本轮 main，独立从公网核对四文件哈希；新提交有十五分钟发布宽限期。控制器状态存在时，还校验 served_commit、失败状态及二十分钟心跳。
 
-启用前 deploy-status.json 返回 404 时，任务只核对网站资源并明确输出 awaiting_controller，不声称持续部署已启用。启用后要验证状态 URL、精确提交、定时器和一次真实后续发布；公开状态无需认证且不含内部路径。
+持续监测要求控制器状态存在；缺失、过期或失败都令任务失败。只有 PR 对既有站点的只读检查显式传入 --allow-missing-controller，才会在状态 404 时只核对网站资源并输出 awaiting_controller。定时监测不使用这个例外。启动控制器时可先健康核验既有 a780087，不发布新资源；CI 工作流尚未进入 main 时等待检查，不绕过门禁。随后合入流程 PR，再验证一次真实后续提交的自动发布。公开状态无需认证且不含内部路径。
 
-监测失败会令 GitHub Actions 任务失败，使用仓库/账户已有的 Actions 失败通知机制；是否发邮件取决于当前通知设置，送达需启用时实际验证。没有配置 SMTP、Slack/webhook 或新增通知密钥。服务器还保留 journal、状态和本地审计记录。源 API 暂时不可读时保留现有站点并报告，绝不为凑绿发布未经确认的版本。
+监测失败会令 GitHub Actions 任务失败，使用仓库/账户已有的 Actions 失败通知机制；是否发邮件取决于当前通知设置，送达需启用时实际验证。普通监测通过后，可在 workflow_dispatch 手动选择 notification_probe：它只制造一个明确标注的失败运行，不改生产文件，用于检查现有通知送达。没有配置 SMTP、Slack/webhook 或新增通知密钥。服务器还保留 journal、状态和本地审计记录。源 API 暂时不可读时保留现有站点并报告，绝不为凑绿发布未经确认的版本。
 
 如不批准常驻服务，继续使用已验证的逐次 SSH 发布。改用 GitHub 推送部署则需要另行确认受限部署身份及信任关系，不能把当前默认 Lightsail 私钥直接塞进 Actions。

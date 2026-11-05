@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      notification_probe:
+        description: 'Intentional failed run to verify existing notification delivery; no deployment'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -22,3 +28,8 @@ jobs:
           persist-credentials: false
       - name: Verify live assets and controller heartbeat
         run: python3 deploy/auto_deploy.py monitor
+      - name: Intentional notification delivery probe
+        if: github.event_name == 'workflow_dispatch' && inputs.notification_probe
+        run: |
+          printf '%s\n' '::error::Intentional notification delivery probe; no production files changed'
+          exit 1

@@ -142,7 +142,12 @@ class PublicClient:
         except (KeyError, TypeError):
             raise DeployError("INVALID_HEAD") from None
     def ready(self, sha):
-        result = self.json(API + "/actions/workflows/site-checks.yml/runs?event=push&head_sha=" + commit_id(sha) + "&per_page=10")
+        try:
+            result = self.json(API + "/actions/workflows/site-checks.yml/runs?event=push&head_sha=" + commit_id(sha) + "&per_page=10")
+        except DeployError as error:
+            if error.code == "HTTP_404":
+                return False
+            raise
         return any(run.get("head_sha") == sha and run.get("head_branch") == "main"
                    and run.get("event") == "push" and run.get("status") == "completed"
                    and run.get("conclusion") == "success"
@@ -349,12 +354,13 @@ class Publisher:
             write_json(self.state_file, state)
             return self.status("retry_requested", state, sha)
 
-def monitor(client=None, now=utcnow, grace=900, stale=1200):
+def monitor(client=None, now=utcnow, grace=900, stale=1200, allow_missing=False):
     client = client or PublicClient()
     head = client.head()
     data = client.snapshot(head)
     expected = sums(data)
     status = client.status()
+    require(status is not None or allow_missing, "CONTROLLER_MISSING")
     if status is not None:
         require(status.get("schema") == "qianhao.ai/deploy-status@1", "STATUS_SCHEMA")
         age = (now() - parse_time(status.get("checked_at"))).total_seconds()
@@ -383,6 +389,7 @@ def main():
     parser.add_argument("--source", type=Path, default=Path("."))
     parser.add_argument("--commit")
     parser.add_argument("--backup")
+    parser.add_argument("--allow-missing-controller", action="store_true")
     args = parser.parse_args()
     try:
         if args.mode == "validate-source":
@@ -396,7 +403,7 @@ def main():
             data = client.snapshot({"sha": sha, "tree": commit_id(commit["tree"]["sha"])})
             result = {"phase": "valid_commit", "commit": sha, "sha256": sums(data)}
         elif args.mode == "monitor":
-            result = monitor()
+            result = monitor(allow_missing=args.allow_missing_controller)
         else:
             publisher = Publisher(args.root, args.state_dir, args.backups)
             result = publisher.sync() if args.mode == "sync" else publisher.retry(args.commit) if args.mode == "retry" else publisher.rollback(args.backup)

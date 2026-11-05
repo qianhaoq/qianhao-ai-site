@@ -65,9 +65,9 @@ class Fixture(unittest.TestCase):
     def sync(self):
         with contextlib.redirect_stdout(io.StringIO()):
             return self.publisher.sync()
-    def assertCode(self, expected, function, *args):
+    def assertCode(self, expected, function, *args, **kwargs):
         with self.assertRaises(m.DeployError) as error:
-            function(*args)
+            function(*args, **kwargs)
         self.assertEqual(error.exception.code, expected)
 
 class DeployTests(Fixture):
@@ -242,6 +242,10 @@ class WireTests(unittest.TestCase):
         wire.corrupt = True
         with self.assertRaisesRegex(m.DeployError, "GIT_BLOB_MISMATCH"):
             wire.snapshot({"sha": SHA, "tree": TREE})
+    def test_missing_gate_definition_waits_without_authorizing_publication(self):
+        wire = self.Wire(self)
+        with patch.object(wire, "json", side_effect=m.DeployError("HTTP_404")):
+            self.assertFalse(wire.ready(SHA))
     def test_gate_requires_successful_push_run_on_the_exact_main_commit(self):
         wire = self.Wire(self)
         run = {"head_sha": SHA, "head_branch": "main", "event": "push", "status": "completed", "conclusion": "success"}
@@ -254,9 +258,12 @@ class WireTests(unittest.TestCase):
 class MonitorTests(Fixture):
     def test_monitor_reports_missing_controller_without_claiming_it_is_enabled(self):
         self.client.data, self.client.sha = OLD, m.BASE_COMMIT
-        result = m.monitor(self.client, lambda: NOW)
+        result = m.monitor(self.client, lambda: NOW, allow_missing=True)
         self.assertEqual(result["phase"], "awaiting_controller")
         self.assertTrue(result["assets_verified"])
+    def test_missing_controller_fails_the_scheduled_monitor(self):
+        self.client.data, self.client.sha = OLD, m.BASE_COMMIT
+        self.assertCode("CONTROLLER_MISSING", m.monitor, self.client, lambda: NOW)
     def test_failed_and_stale_controller_status_produce_monitor_failures(self):
         self.sync()
         self.assertEqual(m.monitor(self.client, lambda: NOW)["phase"], "success")
@@ -267,9 +274,9 @@ class MonitorTests(Fixture):
         self.assertCode("CONTROLLER_FAILED", m.monitor, self.client, lambda: NOW)
     def test_recent_commit_has_a_grace_period_but_old_drift_fails(self):
         self.client.date = m.stamp(NOW)
-        self.assertEqual(m.monitor(self.client, lambda: NOW)["phase"], "pending_grace")
+        self.assertEqual(m.monitor(self.client, lambda: NOW, allow_missing=True)["phase"], "pending_grace")
         self.client.date = m.stamp(NOW - dt.timedelta(hours=1))
-        self.assertCode("PUBLIC_ASSET_MISMATCH", m.monitor, self.client, lambda: NOW)
+        self.assertCode("PUBLIC_ASSET_MISMATCH", m.monitor, self.client, lambda: NOW, allow_missing=True)
     def test_future_controller_clock_cannot_hide_a_stopped_controller(self):
         self.sync()
         status = self.client.status()
@@ -278,7 +285,7 @@ class MonitorTests(Fixture):
         self.assertCode("CONTROLLER_STALE", m.monitor, self.client, lambda: NOW)
     def test_future_commit_date_cannot_extend_the_release_grace_forever(self):
         self.client.date = m.stamp(NOW + dt.timedelta(days=1))
-        self.assertCode("PUBLIC_ASSET_MISMATCH", m.monitor, self.client, lambda: NOW)
+        self.assertCode("PUBLIC_ASSET_MISMATCH", m.monitor, self.client, lambda: NOW, allow_missing=True)
     def test_cli_failure_exits_nonzero_for_github_actions_notifications(self):
         with patch.object(m, "PublicClient", return_value=self.client), patch("sys.argv", ["auto_deploy.py", "monitor"]), contextlib.redirect_stdout(io.StringIO()) as output:
             with self.assertRaises(SystemExit) as result:
