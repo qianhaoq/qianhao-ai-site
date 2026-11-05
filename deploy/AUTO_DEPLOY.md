@@ -24,7 +24,7 @@
 2. 读取 main 的完整 SHA；只有该 SHA 在 main 的 push 事件上通过 site-checks.yml，才准备新版本。
 3. 读取该提交的 tree 和固定 SHA 的四个原始文件。拒绝符号链接、超限文件、损坏 Git blob、脚本内容及错误 canonical/robots/sitemap。原始文件始终按精确提交读取。
 4. 提交更改在准备期间前进时放弃旧轮次。生产文件有手工漂移时停止，不覆盖未知改动。
-5. 资源有变化时，先保存并核验完整四文件备份和旧状态，再写入持久事务记录。每个文件用同目录临时文件和 replace 发布，样式先于首页；不声称四文件作为一个目录原子切换。
+5. 资源有变化时，先保存并核验完整四文件备份和旧状态，fsync 每个备份文件、manifest、备份子目录和备份父目录，之后才写入持久事务记录。每个文件用同目录临时文件和 replace 发布，样式先于首页；不声称四文件作为一个目录原子切换。
 6. 核对磁盘和正式 HTTPS 四文件指纹，成功后记录 served_commit。无资源变化的文档提交只更新版本记录；相同提交只进行健康核验。
 7. 写入或上线校验失败则恢复旧文件。中途被终止时，下轮从事务记录恢复；已经提交完成的事务不会被错误回滚。失败提交被阻止重复发布，新 main 或明确 retry 才能继续。
 
@@ -54,7 +54,7 @@ systemd-analyze verify deploy/systemd/qianhao-site-deploy.service deploy/systemd
 python3 /path/to/reviewed/auto_deploy.py inspect-commit --commit 完整已合并SHA
 ~~~
 
-PR 的 CI 另做匿名只读公网检查，核对当时 main 对应的已发布资源。此检查只在 PR 事件执行；main 的 push 检查不能要求新版本已经上线，否则会与发布器等待 CI 形成循环依赖。
+PR 的 CI 另做匿名只读公网检查。控制器尚未启用且状态为 404 时，固定核对已人工验收的 a780087 四文件；即使 main 已前进，也不会把待发布版本误当已发布版本。控制器存在后，检查其心跳、版本和当前 main 的资源。此检查只在 PR 事件执行；main 的 push 检查不能要求新版本已经上线，否则会与发布器等待 CI 形成循环依赖。
 
 还需在实际服务器核对 Python/systemd 版本、四文件指纹和 unit 兼容性。此步骤不能用 CI 上的静态 unit 校验代替。
 
@@ -65,6 +65,16 @@ PR 的 CI 另做匿名只读公网检查，核对当时 main 对应的已发布�
 ~~~sh
 test -d /usr/local/libexec || sudo install -d -m 0755 /usr/local/libexec
 sudo install -d -m 0700 /var/lib/qianhao-site-deploy /var/backups/qianhao.ai/auto
+sudo python3 - <<'PY'
+import os
+for path in ("/var/lib/qianhao-site-deploy", "/var/lib",
+             "/var/backups/qianhao.ai/auto", "/var/backups/qianhao.ai", "/var/backups"):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+PY
 sudo install -m 0555 deploy/auto_deploy.py /usr/local/libexec/qianhao-site-deploy.py
 sudo install -m 0644 deploy/systemd/qianhao-site-deploy.service /etc/systemd/system/
 sudo install -m 0644 deploy/systemd/qianhao-site-deploy.timer /etc/systemd/system/
@@ -81,7 +91,7 @@ sudo systemctl enable --now qianhao-site-deploy.timer
 sudo systemctl list-timers qianhao-site-deploy.timer --all
 ~~~
 
-/usr/local/libexec 如已存在则保留其权限；如不存在，须在同次确认的安装动作中以 root:root 0755 创建。程序、unit 和状态目录须保持 root 所有，不授予 www-data、ubuntu 或 CI 新的写入权限。启动失败时先查 journal 和事务记录，不重复覆盖文件或清除状态。
+预先创建并落盘状态与备份目录的父目录项，避免首次运行时仅有子目录数据已落盘。程序在受限 service 内不写这些父目录。/usr/local/libexec 如已存在则保留其权限；如不存在，须在同次确认的安装动作中以 root:root 0755 创建。程序、unit 和状态目录须保持 root 所有，不授予 www-data、ubuntu 或 CI 新的写入权限。启动失败时先查 journal 和事务记录，不重复覆盖文件或清除状态。
 
 ## 回滚与重试
 
@@ -91,7 +101,7 @@ auto 备份目录名为 UTC时间-目标SHA-随机后缀，manifest 包含此前
 sudo python3 -I /usr/local/libexec/qianhao-site-deploy.py rollback --backup 备份目录名
 ~~~
 
-程序校验当前文件、备份指纹及目录边界，恢复四文件，标记刚回滚的提交为 blocked。定时器不会重新发布同一失败提交；新的 main 可正常发布。确认故障原因已消除且 main 仍是同一 SHA 时，可明确重试：
+程序校验当前文件、备份指纹及目录边界，先落盘 kind=rollback 事务，再恢复四文件，标记刚回滚的提交为 blocked。回滚在首次写入前或部分写入后中断时，下次运行都会完成回滚，不会将它当成已提交成功的发布。定时器不会重新发布同一失败提交；新的 main 可正常发布。确认故障原因已消除且 main 仍是同一 SHA 时，可明确重试：
 
 ~~~sh
 sudo python3 -I /usr/local/libexec/qianhao-site-deploy.py retry --commit 完整失败SHA
@@ -102,9 +112,9 @@ sudo systemctl start qianhao-site-deploy.service
 
 ## 验证和失败通知
 
-site-production-monitor.yml 在 main 上每十五分钟运行，也支持手动运行。它固定本轮 main，独立从公网核对四文件哈希；新提交有十五分钟发布宽限期。控制器状态存在时，还校验 served_commit、失败状态及二十分钟心跳。
+site-production-monitor.yml 每十五分钟先读取仓库内 deploy/monitor-config.json，初始 enabled=false，因此持续核验任务明确跳过。服务器安装、首次发布和公网验收完成后，再通过普通评审提交将 enabled 改为 true；无需仓库管理权限、secret 或新凭证。手动运行会始终执行严格监测，供启用验收使用。\n\n正式监测固定本轮 main，独立从公网核对四文件哈希；新提交有十五分钟发布宽限期，还校验 served_commit、失败状态及二十分钟心跳。
 
-持续监测要求控制器状态存在；缺失、过期或失败都令任务失败。只有 PR 对既有站点的只读检查显式传入 --allow-missing-controller，才会在状态 404 时只核对网站资源并输出 awaiting_controller。定时监测不使用这个例外。启动控制器时可先健康核验既有 a780087，不发布新资源；CI 工作流尚未进入 main 时等待检查，不绕过门禁。随后合入流程 PR，再验证一次真实后续提交的自动发布。公开状态无需认证且不含内部路径。
+启用后的持续监测要求控制器状态存在；缺失、过期或失败都令任务失败。只有 PR 对既有站点的只读检查显式传入 --allow-missing-controller，才会在状态 404 时固定核对已批准 a780087，输出 awaiting_controller；不会宣称控制器已启用。定时监测不使用这个例外。\n\n启用顺序：合入经评审的流程代码（监测开关保持 false）→ 在服务器完成只读环境检查 → 经逐次确认安装受限 service/timer → 首次精确版本发布与公网验收 → 合入 enabled=true 的监测开关提交并验证其自动发布 → 手动严格监测及通知探针验收。启动时若 CI 工作流尚未进入 main 则等待，不绕过门禁。公开状态无需认证且不含内部路径。
 
 监测失败会令 GitHub Actions 任务失败，使用仓库/账户已有的 Actions 失败通知机制；是否发邮件取决于当前通知设置，送达需启用时实际验证。普通监测通过后，可在 workflow_dispatch 手动选择 notification_probe：它只制造一个明确标注的失败运行，不改生产文件，用于检查现有通知送达。没有配置 SMTP、Slack/webhook 或新增通知密钥。服务器还保留 journal、状态和本地审计记录。源 API 暂时不可读时保留现有站点并报告，绝不为凑绿发布未经确认的版本。
 

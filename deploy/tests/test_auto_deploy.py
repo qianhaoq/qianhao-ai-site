@@ -43,7 +43,7 @@ class Fake:
         return self.ready_value
     def snapshot(self, head):
         self.snapshots += 1
-        return dict(self.data)
+        return dict(OLD if head["sha"] == m.BASE_COMMIT else self.data)
     def verify_live(self, sha, expected):
         if self.fail_live or m.sums(m.read_assets(self.root)) != expected:
             raise m.DeployError("PUBLIC_ASSET_MISMATCH")
@@ -212,6 +212,95 @@ class DeployTests(Fixture):
         self.assertCode("STYLESHEET_IDENTITY", m.validate_assets, stale)
         m.validate_assets(updated())
 
+
+    def test_manual_rollback_journal_recovers_before_first_restore_write(self):
+        self.sync()
+        backup = next(self.backups.iterdir())
+        with patch.object(self.publisher, "restore", side_effect=OSError("interrupted before restore")):
+            with self.assertRaises(OSError):
+                self.publisher.rollback(backup.name)
+        tx = json.loads((self.state / "transaction.json").read_text())
+        self.assertEqual(tx["kind"], "rollback")
+        self.assertEqual(m.sums(m.read_assets(self.root)), m.sums(self.client.data))
+        result = self.sync()
+        self.assertEqual(result["error_code"], "RECOVERED_AFTER_INTERRUPTED_ROLLBACK")
+        self.assertEqual(m.sums(m.read_assets(self.root)), m.BASE_SUMS)
+        self.assertEqual(self.sync()["phase"], "blocked")
+    def test_manual_rollback_recovers_after_partial_restore(self):
+        self.sync()
+        backup = next(self.backups.iterdir())
+        original, count = m.atomic_bytes, [0]
+        def once(path, body, mode):
+            if path.parent == self.root and path.name in m.ASSETS:
+                count[0] += 1
+                if count[0] == 2:
+                    raise OSError("interrupted after first restore write")
+            return original(path, body, mode)
+        with patch.object(m, "atomic_bytes", side_effect=once):
+            with self.assertRaises(OSError):
+                self.publisher.rollback(backup.name)
+        self.assertTrue((self.state / "transaction.json").exists())
+        self.assertEqual((self.root / "styles.css").read_bytes(), OLD["styles.css"])
+        self.assertEqual((self.root / "index.html").read_bytes(), self.client.data["index.html"])
+        self.assertEqual(self.sync()["error_code"], "RECOVERED_AFTER_INTERRUPTED_ROLLBACK")
+        self.assertEqual(m.sums(m.read_assets(self.root)), m.BASE_SUMS)
+        self.assertEqual(self.sync()["phase"], "blocked")
+    def test_backup_files_and_directory_entries_are_durable_before_journal(self):
+        synced, original_fsync, original_write = set(), os.fsync, m.write_json
+        def observe(fd):
+            original_fsync(fd)
+            st = os.fstat(fd)
+            synced.add((st.st_dev, st.st_ino))
+        def journal(path, value, mode=0o600):
+            if path == self.state / "transaction.json":
+                backup = self.backups / value["backup"]
+                for item in [self.backups, backup] + [backup / n for n in m.ASSETS]:
+                    st = item.stat()
+                    self.assertIn((st.st_dev, st.st_ino), synced, str(item))
+            return original_write(path, value, mode)
+        with patch.object(m.os, "fsync", side_effect=observe), patch.object(m, "write_json", side_effect=journal):
+            self.assertEqual(self.sync()["phase"], "success")
+    def test_backup_file_durability_failure_preserves_production(self):
+        original = os.fsync
+        def fail_backup_file(fd):
+            st = os.fstat(fd)
+            for backup in self.backups.glob("*") if self.backups.exists() else []:
+                for asset in m.ASSETS:
+                    path = backup / asset
+                    if path.exists() and (path.stat().st_dev, path.stat().st_ino) == (st.st_dev, st.st_ino):
+                        raise OSError("backup fsync failed")
+            return original(fd)
+        with patch.object(m.os, "fsync", side_effect=fail_backup_file):
+            self.assertEqual(self.sync()["phase"], "failed")
+        self.assertEqual(m.sums(m.read_assets(self.root)), m.BASE_SUMS)
+        self.assertFalse((self.state / "transaction.json").exists())
+    def test_backup_parent_durability_failure_preserves_production(self):
+        original = m.fsync_directory
+        def fail_parent(path):
+            if path == self.backups:
+                raise OSError("backup parent fsync failed")
+            return original(path)
+        with patch.object(m, "fsync_directory", side_effect=fail_parent):
+            self.assertEqual(self.sync()["phase"], "failed")
+        self.assertEqual(m.sums(m.read_assets(self.root)), m.BASE_SUMS)
+        self.assertFalse((self.state / "transaction.json").exists())
+    def test_url_control_characters_cannot_hide_active_schemes(self):
+        for entity in (b"&#x09;", b"&#x0a;", b"&#x0d;"):
+            with self.subTest(entity=entity):
+                data = updated()
+                data["index.html"] += b'<a href="java' + entity + b'script:alert(1)">bad</a>'
+                self.assertCode("URL_CONTROL", m.validate_assets, data)
+        data = updated()
+        data["index.html"] += b'<a href="java\x00script:alert(1)">bad</a>'
+        self.assertCode("URL_CONTROL", m.validate_assets, data)
+    def test_duplicate_attributes_cannot_hide_the_first_browser_value(self):
+        for attrs in (b'href="javascript:alert(1)" href="https://qianhao.ai/"',
+                      b'HREF="javascript:alert(1)" href="https://qianhao.ai/"'):
+            with self.subTest(attrs=attrs):
+                data = updated()
+                data["index.html"] += b"<a " + attrs + b">bad</a>"
+                self.assertCode("DUPLICATE_ATTRIBUTE", m.validate_assets, data)
+
 class WireTests(unittest.TestCase):
     BLOBS = {"index.html": "05753cfc1cfaf8aab1c89d105bf0dfbf7dfad9e5",
              "styles.css": "04c78e3293e61e4c0f94f492ad03f661c20751b0",
@@ -256,11 +345,28 @@ class WireTests(unittest.TestCase):
         self.assertTrue(wire.ready(SHA))
 
 class MonitorTests(Fixture):
+    def pending_status(self):
+        m.write_json(self.root / "deploy-status.json", {
+            "schema": "qianhao.ai/deploy-status@1", "phase": "pending_checks",
+            "desired_commit": SHA, "served_commit": m.BASE_COMMIT,
+            "checked_at": m.stamp(NOW), "last_success": None,
+        }, 0o644)
     def test_monitor_reports_missing_controller_without_claiming_it_is_enabled(self):
         self.client.data, self.client.sha = OLD, m.BASE_COMMIT
         result = m.monitor(self.client, lambda: NOW, allow_missing=True)
         self.assertEqual(result["phase"], "awaiting_controller")
         self.assertTrue(result["assets_verified"])
+        self.assertEqual(result["approved_commit"], m.BASE_COMMIT)
+    def test_pre_activation_probe_checks_approved_baseline_when_main_is_ahead(self):
+        self.assertEqual(self.client.sha, SHA)
+        self.assertNotEqual(m.sums(self.client.data), m.BASE_SUMS)
+        result = m.monitor(self.client, lambda: NOW, allow_missing=True)
+        self.assertEqual(result["phase"], "awaiting_controller")
+        self.assertEqual(result["approved_commit"], m.BASE_COMMIT)
+        self.assertTrue(result["assets_verified"])
+    def test_pre_activation_probe_still_detects_changed_production(self):
+        (self.root / "index.html").write_bytes(b"unexpected production")
+        self.assertCode("PUBLIC_ASSET_MISMATCH", m.monitor, self.client, lambda: NOW, allow_missing=True)
     def test_missing_controller_fails_the_scheduled_monitor(self):
         self.client.data, self.client.sha = OLD, m.BASE_COMMIT
         self.assertCode("CONTROLLER_MISSING", m.monitor, self.client, lambda: NOW)
@@ -273,6 +379,7 @@ class MonitorTests(Fixture):
         self.sync()
         self.assertCode("CONTROLLER_FAILED", m.monitor, self.client, lambda: NOW)
     def test_recent_commit_has_a_grace_period_but_old_drift_fails(self):
+        self.pending_status()
         self.client.date = m.stamp(NOW)
         self.assertEqual(m.monitor(self.client, lambda: NOW, allow_missing=True)["phase"], "pending_grace")
         self.client.date = m.stamp(NOW - dt.timedelta(hours=1))
@@ -284,6 +391,7 @@ class MonitorTests(Fixture):
         m.write_json(self.root / "deploy-status.json", status, 0o644)
         self.assertCode("CONTROLLER_STALE", m.monitor, self.client, lambda: NOW)
     def test_future_commit_date_cannot_extend_the_release_grace_forever(self):
+        self.pending_status()
         self.client.date = m.stamp(NOW + dt.timedelta(days=1))
         self.assertCode("PUBLIC_ASSET_MISMATCH", m.monitor, self.client, lambda: NOW, allow_missing=True)
     def test_cli_failure_exits_nonzero_for_github_actions_notifications(self):
@@ -292,6 +400,23 @@ class MonitorTests(Fixture):
                 m.main()
         self.assertEqual(result.exception.code, 1)
         self.assertEqual(json.loads(output.getvalue().splitlines()[-1])["phase"], "failed")
+
+
+class MonitorConfigTests(unittest.TestCase):
+    def test_activation_is_an_explicit_validated_boolean(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "monitor-config.json"
+            for enabled in (False, True):
+                path.write_text(json.dumps({"schema": 1, "enabled": enabled}))
+                self.assertIs(m.monitor_config(path)["enabled"], enabled)
+            for value in ({"schema": 1, "enabled": "false"}, {"schema": True, "enabled": False},
+                          {"schema": 2, "enabled": False}, {"schema": 1},
+                          {"schema": 1, "enabled": False, "unknown": True}, []):
+                path.write_text(json.dumps(value))
+                with self.assertRaisesRegex(m.DeployError, "MONITOR_CONFIG"):
+                    m.monitor_config(path)
+    def test_checked_in_activation_config_is_valid(self):
+        m.monitor_config(ROOT / "deploy/monitor-config.json")
 
 if __name__ == "__main__":
     unittest.main()

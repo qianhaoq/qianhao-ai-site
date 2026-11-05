@@ -19,7 +19,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  activation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      enabled: ${{ steps.config.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Read reviewed monitoring activation
+        id: config
+        run: |
+          python3 deploy/auto_deploy.py monitor-config --source . > monitor-activation.json
+          cat monitor-activation.json
+          python3 - <<'PY'
+          import json
+          import os
+          with open("monitor-activation.json") as source:
+              config = json.load(source)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("enabled=" + str(config["enabled"]).lower() + "\n")
+          PY
+
   verify-production:
+    needs: activation
+    if: github.event_name == 'workflow_dispatch' || needs.activation.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

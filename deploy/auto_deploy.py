@@ -23,6 +23,7 @@ API = "https://api.github.com/repos/" + REPO
 ASSETS = ("styles.css", "robots.txt", "sitemap.xml", "index.html")
 LIMIT = 262144
 BASE_COMMIT = "a780087b56da04f235cce49a7c06136e0e4c4785"
+BASE_TREE = "52aeb2c1693046aab597e6332288c8ba6c10c1e8"
 BASE_SUMS = {
     "index.html": "f2cad150a5ec8026ff75b38e2fbe1d07a0f6f5347d11149a5957a4f4c785fcc3",
     "styles.css": "ac20c9ddd7de40d94890bde4cd2400aba5e785d87bae61b26c61db199a21c975",
@@ -70,11 +71,15 @@ class HtmlCheck(HTMLParser):
         self.styles = []
         self.h1 = 0
     def handle_starttag(self, tag, attributes):
+        names = [name.lower() for name, unused in attributes]
+        require(len(names) == len(set(names)), "DUPLICATE_ATTRIBUTE")
         attrs = dict(attributes)
         require(tag not in {"script", "iframe", "object", "embed", "base"}, "ACTIVE_HTML")
         require(not any(k.lower().startswith("on") for k in attrs), "ACTIVE_HTML")
         for key in ("href", "src", "action"):
-            value = (attrs.get(key) or "").strip().lower()
+            raw = attrs.get(key) or ""
+            require(not any(ord(c) < 32 or ord(c) == 127 for c in raw), "URL_CONTROL")
+            value = raw.strip().lower()
             require(not re.match(r"(javascript|vbscript|data):", value), "ACTIVE_HTML")
         require(not (tag == "meta" and attrs.get("http-equiv", "").lower() == "refresh"), "ACTIVE_HTML")
         if tag == "link" and attrs.get("rel") == "canonical":
@@ -183,6 +188,13 @@ class PublicClient:
                 return None
             raise
 
+def fsync_directory(path):
+    directory = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
 def atomic_bytes(path, body, mode):
     fd, temporary = tempfile.mkstemp(prefix="." + path.name + "-", dir=path.parent)
     try:
@@ -192,11 +204,7 @@ def atomic_bytes(path, body, mode):
             output.flush()
             os.fsync(output.fileno())
         os.replace(temporary, path)
-        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
+        fsync_directory(path.parent)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -261,8 +269,11 @@ class Publisher:
         backup.mkdir(mode=0o700)
         for asset in ASSETS:
             shutil.copy2(self.root / asset, backup / asset, follow_symlinks=False)
+            with (backup / asset).open("rb") as copied:
+                os.fsync(copied.fileno())
         require(sums(read_assets(backup)) == state["sums"], "BACKUP_MISMATCH")
         write_json(backup / "manifest.json", {"schema": 1, "state": state})
+        fsync_directory(self.backups)
         return name
     def backup_data(self, name):
         require(isinstance(name, str) and re.fullmatch(r"\d{8}T\d{6}Z-[a-f0-9]{40}-[a-f0-9]{8}", name), "BACKUP_NAME")
@@ -291,10 +302,13 @@ class Publisher:
             try:
                 if self.transaction.exists():
                     tx = json.loads(self.transaction.read_text())
-                    if state["served_commit"] == tx["target_commit"] and sums(read_assets(self.root)) == state["sums"] == tx["target_sums"]:
+                    kind = tx.get("kind", "publish")
+                    require(kind in {"publish", "rollback"}, "TRANSACTION_KIND")
+                    if kind == "publish" and state["served_commit"] == tx["target_commit"] and sums(read_assets(self.root)) == state["sums"] == tx["target_sums"]:
                         self.transaction.unlink()
                     else:
-                        return self.restore(tx, state)
+                        code = "RECOVERED_AFTER_INTERRUPTED_ROLLBACK" if kind == "rollback" else "RECOVERED_AFTER_INTERRUPTION"
+                        return self.restore(tx, state, code)
                 require(sums(read_assets(self.root)) == state["sums"], "LOCAL_DRIFT")
                 head = self.client.head()
                 desired = head["sha"]
@@ -314,7 +328,7 @@ class Publisher:
                     return self.status("superseded", state, latest["sha"])
                 if target != state["sums"]:
                     name = self.backup(state, desired)
-                    tx = {"target_commit": desired, "target_sums": target, "backup": name}
+                    tx = {"kind": "publish", "target_commit": desired, "target_sums": target, "backup": name}
                     write_json(self.transaction, tx)
                     try:
                         for asset in ASSETS:
@@ -342,7 +356,8 @@ class Publisher:
             if previous["served_commit"] == state["served_commit"] and previous["sums"] == state["sums"]:
                 return {"phase": "already_rolled_back", "served_commit": state["served_commit"],
                         "blocked_commit": state.get("blocked_commit")}
-            tx = {"backup": name, "target_commit": state["served_commit"], "target_sums": state["sums"]}
+            tx = {"kind": "rollback", "backup": name, "target_commit": state["served_commit"], "target_sums": state["sums"]}
+            write_json(self.transaction, tx)
             return self.restore(tx, state, "MANUAL_ROLLBACK")
     def retry(self, sha):
         with exclusive(self.state_dir):
@@ -354,22 +369,33 @@ class Publisher:
             write_json(self.state_file, state)
             return self.status("retry_requested", state, sha)
 
+def monitor_config(path):
+    config = json.loads(Path(path).read_text())
+    require(isinstance(config, dict) and set(config) == {"schema", "enabled"} and
+            type(config["schema"]) is int and config["schema"] == 1 and type(config["enabled"]) is bool, "MONITOR_CONFIG")
+    return config
+
 def monitor(client=None, now=utcnow, grace=900, stale=1200, allow_missing=False):
     client = client or PublicClient()
+    status = client.status()
+    if status is None:
+        require(allow_missing, "CONTROLLER_MISSING")
+        approved = client.snapshot({"sha": BASE_COMMIT, "tree": BASE_TREE})
+        require(sums(approved) == BASE_SUMS, "APPROVED_BASELINE_MISMATCH")
+        gate_ready = client.ready(BASE_COMMIT)
+        client.verify_live(BASE_COMMIT, BASE_SUMS)
+        return {"phase": "awaiting_controller", "approved_commit": BASE_COMMIT,
+                "assets_verified": True, "baseline_gate_ready": gate_ready}
     head = client.head()
     data = client.snapshot(head)
     expected = sums(data)
-    status = client.status()
-    require(status is not None or allow_missing, "CONTROLLER_MISSING")
-    if status is not None:
-        require(status.get("schema") == "qianhao.ai/deploy-status@1", "STATUS_SCHEMA")
-        age = (now() - parse_time(status.get("checked_at"))).total_seconds()
-        require(-120 <= age <= stale, "CONTROLLER_STALE")
-        require(not (status.get("desired_commit") == head["sha"] and status.get("phase") in {"failed", "blocked"}), "CONTROLLER_FAILED")
+    require(status.get("schema") == "qianhao.ai/deploy-status@1", "STATUS_SCHEMA")
+    age = (now() - parse_time(status.get("checked_at"))).total_seconds()
+    require(-120 <= age <= stale, "CONTROLLER_STALE")
+    require(not (status.get("desired_commit") == head["sha"] and status.get("phase") in {"failed", "blocked"}), "CONTROLLER_FAILED")
     try:
         client.verify_live(head["sha"], expected)
-        if status is not None:
-            require(status.get("served_commit") == head["sha"] and status.get("phase") == "success", "VERSION_UNREPORTED")
+        require(status.get("served_commit") == head["sha"] and status.get("phase") == "success", "VERSION_UNREPORTED")
     except DeployError:
         latest = client.head()
         if latest["sha"] != head["sha"]:
@@ -378,11 +404,11 @@ def monitor(client=None, now=utcnow, grace=900, stale=1200, allow_missing=False)
         if -120 <= age < grace:
             return {"phase": "pending_grace", "desired_commit": head["sha"]}
         raise
-    return {"phase": "success" if status else "awaiting_controller", "commit": head["sha"], "assets_verified": True}
+    return {"phase": "success", "commit": head["sha"], "assets_verified": True}
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["sync", "rollback", "retry", "validate-source", "inspect-commit", "monitor"])
+    parser.add_argument("mode", choices=["sync", "rollback", "retry", "validate-source", "inspect-commit", "monitor", "monitor-config"])
     parser.add_argument("--root", type=Path, default=Path("/var/www/qianhao.ai"))
     parser.add_argument("--state-dir", type=Path, default=Path("/var/lib/qianhao-site-deploy"))
     parser.add_argument("--backups", type=Path, default=Path("/var/backups/qianhao.ai/auto"))
@@ -404,6 +430,8 @@ def main():
             result = {"phase": "valid_commit", "commit": sha, "sha256": sums(data)}
         elif args.mode == "monitor":
             result = monitor(allow_missing=args.allow_missing_controller)
+        elif args.mode == "monitor-config":
+            result = {"phase": "monitor_activation", **monitor_config(args.source / "deploy/monitor-config.json")}
         else:
             publisher = Publisher(args.root, args.state_dir, args.backups)
             result = publisher.sync() if args.mode == "sync" else publisher.retry(args.commit) if args.mode == "retry" else publisher.rollback(args.backup)
