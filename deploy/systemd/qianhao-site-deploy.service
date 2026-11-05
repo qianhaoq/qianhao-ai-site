@@ -1,0 +1,40 @@
+[Unit]
+Description=Pull and verify the qianhao.ai static main release
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 -I /usr/local/libexec/qianhao-site-deploy.py sync
+TimeoutStartSec=240
+UMask=0077
+StateDirectory=qianhao-site-deploy
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/www/qianhao.ai /var/lib/qianhao-site-deploy /var/backups/qianhao.ai/auto
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CPUQuota=20%
+MemoryMax=128M
+TasksMax=16
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=qianhao-site-deploy

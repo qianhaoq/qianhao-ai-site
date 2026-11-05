@@ -1,0 +1,40 @@
+name: Static site checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-static-site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Python runtime
+        run: python3 --version
+      - name: Deployment and recovery regression tests
+        run: python3 -m unittest discover -s deploy/tests -v
+      - name: Validate the exact static source
+        run: python3 deploy/auto_deploy.py validate-source --source .
+      - name: Validate explicit production monitoring activation
+        run: python3 deploy/auto_deploy.py monitor-config --source .
+      - name: Verify systemd unit syntax without installing
+        run: systemd-analyze verify deploy/systemd/qianhao-site-deploy.service deploy/systemd/qianhao-site-deploy.timer
+      - name: Anonymous read-only check of existing production
+        if: github.event_name == 'pull_request'
+        run: python3 deploy/auto_deploy.py monitor --allow-missing-controller
+      - name: Reviewed installation file fingerprints
+        run: sha256sum deploy/auto_deploy.py deploy/systemd/qianhao-site-deploy.service deploy/systemd/qianhao-site-deploy.timer
+      - name: Whitespace validation
+        run: git diff --check
