@@ -54,6 +54,8 @@ systemd-analyze verify deploy/systemd/qianhao-site-deploy.service deploy/systemd
 python3 /path/to/reviewed/auto_deploy.py inspect-commit --commit 完整已合并SHA
 ~~~
 
+PR 的 CI 另做匿名只读公网检查，核对当时 main 对应的已发布资源。此检查只在 PR 事件执行；main 的 push 检查不能要求新版本已经上线，否则会与发布器等待 CI 形成循环依赖。
+
 还需在实际服务器核对 Python/systemd 版本、四文件指纹和 unit 兼容性。此步骤不能用 CI 上的静态 unit 校验代替。
 
 ## 待确认的安装与启用动作
