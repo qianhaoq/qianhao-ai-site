@@ -178,6 +178,25 @@ class DeployTests(Fixture):
         self.assertEqual(self.sync()["phase"], "blocked")
         self.assertCode("BACKUP_NAME", self.publisher.backup_data, "../../other-site")
         self.assertCode("RETRY_COMMIT_CHANGED", self.publisher.retry, "e" * 40)
+    def test_repeated_manual_rollback_keeps_the_failed_commit_blocked(self):
+        self.sync()
+        backup = next(self.backups.iterdir())
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.publisher.rollback(backup.name)
+            repeated = self.publisher.rollback(backup.name)
+        self.assertEqual(repeated["phase"], "already_rolled_back")
+        self.assertEqual(repeated["blocked_commit"], SHA)
+        self.assertEqual(self.sync()["phase"], "blocked")
+        self.assertEqual(self.client.snapshots, 1)
+        self.assertEqual(m.sums(m.read_assets(self.root)), m.BASE_SUMS)
+    def test_successful_rollback_cli_is_not_reported_as_an_operation_failure(self):
+        self.sync()
+        backup = next(self.backups.iterdir())
+        with patch.object(m, "Publisher", return_value=self.publisher), patch("sys.argv", ["auto_deploy.py", "rollback", "--backup", backup.name]), contextlib.redirect_stdout(io.StringIO()) as output:
+            m.main()
+        result = json.loads(output.getvalue().splitlines()[-1])
+        self.assertTrue(result["operation_succeeded"])
+        self.assertEqual(m.sums(m.read_assets(self.root)), m.BASE_SUMS)
     def test_competing_publisher_cannot_enter(self):
         with m.exclusive(self.state):
             self.assertCode("DEPLOY_BUSY", self.publisher.sync)

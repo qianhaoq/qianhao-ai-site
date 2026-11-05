@@ -333,6 +333,10 @@ class Publisher:
             require(not self.transaction.exists(), "RECOVERY_REQUIRED")
             state = self.load()
             require(sums(read_assets(self.root)) == state["sums"], "LOCAL_DRIFT")
+            previous, unused = self.backup_data(name)
+            if previous["served_commit"] == state["served_commit"] and previous["sums"] == state["sums"]:
+                return {"phase": "already_rolled_back", "served_commit": state["served_commit"],
+                        "blocked_commit": state.get("blocked_commit")}
             tx = {"backup": name, "target_commit": state["served_commit"], "target_sums": state["sums"]}
             return self.restore(tx, state, "MANUAL_ROLLBACK")
     def retry(self, sha):
@@ -394,8 +398,10 @@ def main():
         else:
             publisher = Publisher(args.root, args.state_dir, args.backups)
             result = publisher.sync() if args.mode == "sync" else publisher.retry(args.commit) if args.mode == "retry" else publisher.rollback(args.backup)
+        if args.mode == "rollback":
+            result = {**result, "operation": "rollback", "operation_succeeded": True}
         print(json.dumps(result), flush=True)
-        if result.get("phase") in {"failed", "blocked"}:
+        if args.mode == "sync" and result.get("phase") in {"failed", "blocked"}:
             raise SystemExit(1)
     except (DeployError, OSError, ValueError, KeyError, TypeError) as error:
         code = error.code if isinstance(error, DeployError) else "LOCAL_STATE_ERROR"
