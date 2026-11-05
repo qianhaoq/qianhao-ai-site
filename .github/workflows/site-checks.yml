@@ -29,5 +29,7 @@ jobs:
         run: python3 deploy/auto_deploy.py validate-source --source .
       - name: Verify systemd unit syntax without installing
         run: systemd-analyze verify deploy/systemd/qianhao-site-deploy.service deploy/systemd/qianhao-site-deploy.timer
+      - name: Reviewed installation file fingerprints
+        run: sha256sum deploy/auto_deploy.py deploy/systemd/qianhao-site-deploy.service deploy/systemd/qianhao-site-deploy.timer
       - name: Whitespace validation
         run: git diff --check

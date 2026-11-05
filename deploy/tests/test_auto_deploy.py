@@ -270,6 +270,15 @@ class MonitorTests(Fixture):
         self.assertEqual(m.monitor(self.client, lambda: NOW)["phase"], "pending_grace")
         self.client.date = m.stamp(NOW - dt.timedelta(hours=1))
         self.assertCode("PUBLIC_ASSET_MISMATCH", m.monitor, self.client, lambda: NOW)
+    def test_future_controller_clock_cannot_hide_a_stopped_controller(self):
+        self.sync()
+        status = self.client.status()
+        status["checked_at"] = m.stamp(NOW + dt.timedelta(days=1))
+        m.write_json(self.root / "deploy-status.json", status, 0o644)
+        self.assertCode("CONTROLLER_STALE", m.monitor, self.client, lambda: NOW)
+    def test_future_commit_date_cannot_extend_the_release_grace_forever(self):
+        self.client.date = m.stamp(NOW + dt.timedelta(days=1))
+        self.assertCode("PUBLIC_ASSET_MISMATCH", m.monitor, self.client, lambda: NOW)
     def test_cli_failure_exits_nonzero_for_github_actions_notifications(self):
         with patch.object(m, "PublicClient", return_value=self.client), patch("sys.argv", ["auto_deploy.py", "monitor"]), contextlib.redirect_stdout(io.StringIO()) as output:
             with self.assertRaises(SystemExit) as result:

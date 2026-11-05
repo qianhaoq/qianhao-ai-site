@@ -58,9 +58,10 @@ python3 /path/to/reviewed/auto_deploy.py inspect-commit --commit 完整已合并
 
 ## 待确认的安装与启用动作
 
-下面是一份安装清单，不是已经执行的记录。须先批准新增 root oneshot/timer 的限定用途与三个可写路径。所有来源文件来自同一个已评审提交，先校验它们的哈希；不从 main 动态下载程序直接执行。
+下面是一份安装清单，不是已经执行的记录。须先批准新增 root oneshot/timer 的限定用途与三个可写路径。所有来源文件来自同一个已评审提交，对照该提交成功 CI 日志中的三安装文件 SHA-256 校验后再复制；不从 main 动态下载程序直接执行。
 
 ~~~sh
+test -d /usr/local/libexec || sudo install -d -m 0755 /usr/local/libexec
 sudo install -d -m 0700 /var/lib/qianhao-site-deploy /var/backups/qianhao.ai/auto
 sudo install -m 0555 deploy/auto_deploy.py /usr/local/libexec/qianhao-site-deploy.py
 sudo install -m 0644 deploy/systemd/qianhao-site-deploy.service /etc/systemd/system/
@@ -78,7 +79,7 @@ sudo systemctl enable --now qianhao-site-deploy.timer
 sudo systemctl list-timers qianhao-site-deploy.timer --all
 ~~~
 
-/usr/local/libexec 必须已存在，或在同次确认的安装动作中以 root:root 0755 创建。程序、unit 和状态目录须保持 root 所有，不授予 www-data、ubuntu 或 CI 新的写入权限。启动失败时先查 journal 和事务记录，不重复覆盖文件或清除状态。
+/usr/local/libexec 如已存在则保留其权限；如不存在，须在同次确认的安装动作中以 root:root 0755 创建。程序、unit 和状态目录须保持 root 所有，不授予 www-data、ubuntu 或 CI 新的写入权限。启动失败时先查 journal 和事务记录，不重复覆盖文件或清除状态。
 
 ## 回滚与重试
 

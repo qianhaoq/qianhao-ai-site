@@ -357,7 +357,8 @@ def monitor(client=None, now=utcnow, grace=900, stale=1200):
     status = client.status()
     if status is not None:
         require(status.get("schema") == "qianhao.ai/deploy-status@1", "STATUS_SCHEMA")
-        require((now() - parse_time(status.get("checked_at"))).total_seconds() <= stale, "CONTROLLER_STALE")
+        age = (now() - parse_time(status.get("checked_at"))).total_seconds()
+        require(-120 <= age <= stale, "CONTROLLER_STALE")
         require(not (status.get("desired_commit") == head["sha"] and status.get("phase") in {"failed", "blocked"}), "CONTROLLER_FAILED")
     try:
         client.verify_live(head["sha"], expected)
@@ -367,7 +368,8 @@ def monitor(client=None, now=utcnow, grace=900, stale=1200):
         latest = client.head()
         if latest["sha"] != head["sha"]:
             return {"phase": "superseded"}
-        if (now() - parse_time(head["date"])).total_seconds() < grace:
+        age = (now() - parse_time(head["date"])).total_seconds()
+        if -120 <= age < grace:
             return {"phase": "pending_grace", "desired_commit": head["sha"]}
         raise
     return {"phase": "success" if status else "awaiting_controller", "commit": head["sha"], "assets_verified": True}
