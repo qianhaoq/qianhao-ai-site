@@ -1,4 +1,4 @@
-# 目标域名 qianhao.ai；当前尚未切 DNS。
+# 目标域名 qianhao.ai；按生产实际目录和已有证书调整。
 # 将静态文件放到 /var/www/qianhao.ai，按实际路径调整 root。
 # 使用 Certbot / Let's Encrypt 获取证书；此文件仅为示例，不会申请证书。
 # 首次申请前需先配置 DNS 与 HTTP 验证，证书就绪后再启用下面的 HTTPS 块。
