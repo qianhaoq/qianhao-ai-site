@@ -1,4 +1,4 @@
-# 目标域名 qianhao.ai；当前尚未切 DNS。
+# 目标域名 qianhao.ai；当前生产使用 nginx，此文件仅为 Caddy 替代方案示例。
 # DNS 指向服务器且 80/443 端口可访问后，Caddy 可自动申请和续期 HTTPS 证书，
 # 并自动将 HTTP 重定向到 HTTPS。此文件仅为示例，尚未启动服务或申请证书。
 # 将静态文件放到 /var/www/qianhao.ai，或按实际部署路径修改 root。
