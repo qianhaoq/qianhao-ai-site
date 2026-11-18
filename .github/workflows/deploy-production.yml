@@ -1,0 +1,62 @@
+name: Deploy production
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download exact triggering commit (no build)
+        env:
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 "https://codeload.github.com/$REPO/tar.gz/$SHA" -o "$RUNNER_TEMP/commit.tgz"
+          mkdir artifact infra
+          prefix="${REPO##*/}-$SHA/"
+          tar -xzf "$RUNNER_TEMP/commit.tgz" --strip-components=1 -C artifact "${prefix}index.html" "${prefix}styles.css" "${prefix}index.md" "${prefix}robots.txt" "${prefix}sitemap.xml"
+          tar -xzf "$RUNNER_TEMP/commit.tgz" --strip-components=1 -C infra "${prefix}deploy/known_hosts" "${prefix}deploy/smoke.sh"
+      - name: Install dedicated SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          umask 077
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/deploy-key"
+          test -s "$RUNNER_TEMP/deploy-key" || { echo 'DEPLOY_SSH_KEY is missing or empty' >&2; exit 1; }
+      - name: Skip superseded commits, publish, and verify public HTTPS
+        env:
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Check immediately before publish. A queued older run exits successfully;
+          # it must never overwrite the newer main tip. Concurrency serializes publishes.
+          tip=$(gh api "repos/$REPO/git/ref/heads/main" --jq .object.sha)
+          if [[ "$tip" != "$SHA" ]]; then
+            echo "Skipping superseded commit $SHA (main is $tip)"
+            exit 0
+          fi
+          ssh_cmd=(ssh -i "$RUNNER_TEMP/deploy-key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=infra/deploy/known_hosts -o BatchMode=yes -o ConnectTimeout=15 qianhao-deploy@43.207.221.125)
+          tar -C artifact -cf - index.html styles.css index.md robots.txt sitemap.xml | "${ssh_cmd[@]}" "publish $SHA" | tee "$RUNNER_TEMP/publish.log"
+          backup=$(sed -n 's/^BACKUP=//p' "$RUNNER_TEMP/publish.log")
+          if [[ ! "$backup" =~ ^/var/www/backups/qianhao\.ai-pre-${SHA}-[0-9]{8}-[0-9]{6}$ ]]; then
+            echo 'Missing or invalid publisher backup receipt' >&2
+            exit 1
+          fi
+          if ! bash infra/deploy/smoke.sh artifact; then
+            "${ssh_cmd[@]}" "rollback $backup"
+            exit 1
+          fi
+      - name: Remove SSH key
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/deploy-key" ]]; then
+            shred -u "$RUNNER_TEMP/deploy-key" || rm -f "$RUNNER_TEMP/deploy-key"
+          fi
