@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 概览
 
-qianhao.ai 个人站的静态源：纯 HTML / CSS，无构建链、无 JavaScript、无外部字体，没有测试或 lint 工具。站点资源只有 `index.html`、`styles.css`、`robots.txt`、`sitemap.xml`；`deploy/` 下是 nginx / Caddy 的**示例**配置，不是实际在用的部署。
+qianhao.ai 个人站的静态源：纯 HTML / CSS，无构建链、无 JavaScript、无外部字体。站点资源是 `index.html`、`styles.css`、`index.md`、`robots.txt`、`sitemap.xml` 五个文件。`deploy/` 下有发布脚本及其测试（`bash deploy/tests/run.sh`，CI 的 Site checks 也跑它），`*.example` 只是配置示例。
 
 ## 本地预览
 
@@ -34,7 +34,7 @@ python3 -c "import hashlib; print(hashlib.sha256(open('styles.css','rb').read())
 - 外链箭头由 CSS 绘制（`.external` + `<span class="arrow" aria-hidden="true">`）；DuoRead 链接标注为“隐私与支持”，不要当作产品入口。
 - 无障碍要求需保持：跳到正文链接、可见焦点、`prefers-reduced-motion`、可见文字与可访问名称一致（不要用 `aria-label` 覆盖掉可见标签文字）。
 - 所在地与公司（上海 · 美团）已经钱浩确认可展示；不新增其他履历、数据或社交账号等未经确认的内容。
-- 正式站（Lightsail nginx）与 GitHub Pages 是两条独立发布路径；不要改部署流程、DNS、证书或服务器配置。
+- **推送或合并到 `main` 会通过 GitHub Actions（`deploy-production.yml`）自动发布到正式站**（Lightsail nginx），所以合并即上线。发布细节和回滚见 README。不要改部署流程、DNS、证书或服务器配置；新增站点文件需要同时改发布脚本。
 
 ## 验收方式（参考 README）
 
