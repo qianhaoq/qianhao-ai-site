@@ -3,83 +3,212 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#fcfcfc">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f6f6f3" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0e0f11" media="(prefers-color-scheme: dark)">
     <title>钱浩 / Qian Hao</title>
-    <meta name="description" content="钱浩的个人站。探索 AI 与日常工具，记录产品与开发中的想法。">
+    <meta name="description" content="钱浩的个人站：Dota2.ai、千浩翻译、DuoRead 等 AI 与日常工具，开源小工具，以及博客与 AI DevFlow Weekly。">
     <meta property="og:title" content="钱浩 / Qian Hao">
-    <meta property="og:description" content="探索 AI 与日常工具，记录产品与开发中的想法。">
+    <meta property="og:description" content="做 AI 与日常工具的工程师。项目、开源与写作。">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="zh_CN">
     <meta property="og:url" content="https://qianhao.ai/">
     <meta name="twitter:card" content="summary">
     <link rel="canonical" href="https://qianhao.ai/">
-    <link rel="stylesheet" href="styles.css?v=65936282f5fbc7e97909bb5137de04029c7d33132089f1070ba22356b4e43fe6">
+    <link rel="stylesheet" href="styles.css?v=8b3896c95ae2fcdd99374f568ebde9b89d5d772e9f04f24523f9fa41d14032f7">
   </head>
   <body>
     <a class="skip-link" href="#main">跳到正文</a>
-    <div class="page">
-      <header class="site-header">
-        <a class="wordmark" href="./" aria-label="qianhao.ai 首页">qianhao.ai</a>
-        <nav aria-label="主导航">
-          <a href="#projects">项目</a>
-          <a href="#writing">写作</a>
-          <a class="external" href="https://github.com/qianhaoq">GitHub<span class="arrow" aria-hidden="true"></span></a>
+    <div class="layout">
+      <header class="profile">
+        <div class="profile-top">
+          <a class="wordmark" href="./" aria-label="qianhao.ai 首页">qianhao.ai</a>
+          <h1>钱浩 <span lang="en">Qian Hao</span></h1>
+          <p class="role">做 AI 与日常工具的工程师<span class="en" lang="en">Engineer building AI &amp; everyday tools</span></p>
+          <p class="bio">在美团工作，同时做 AI 产品与开发者工具，并维护一个博客和一份 AI 研发工作流周刊。</p>
+          <p class="meta"><span class="dot" aria-hidden="true"></span>上海 · 美团 <span lang="en">Shanghai · Meituan</span></p>
+        </div>
+        <nav class="toc" aria-label="页内导航">
+          <ol>
+            <li><a href="#projects"><span class="toc-line" aria-hidden="true"></span>精选项目 <span lang="en">Projects</span></a></li>
+            <li><a href="#now"><span class="toc-line" aria-hidden="true"></span>近期 <span lang="en">Now</span></a></li>
+            <li><a href="#open-source"><span class="toc-line" aria-hidden="true"></span>开源 <span lang="en">Open source</span></a></li>
+            <li><a href="#writing"><span class="toc-line" aria-hidden="true"></span>写作 <span lang="en">Writing</span></a></li>
+          </ol>
         </nav>
+        <ul class="social" aria-label="外部链接">
+          <li><a class="external" href="https://github.com/qianhaoq">GitHub<span class="arrow" aria-hidden="true"></span></a></li>
+          <li><a class="external" href="https://qianhaoq.github.io/">博客<span class="arrow" aria-hidden="true"></span></a></li>
+        </ul>
       </header>
+
       <main id="main" tabindex="-1">
-        <section class="intro" aria-labelledby="name">
-          <h1 id="name">钱浩<span lang="en">Qian Hao</span></h1>
-          <p>我在做 AI 和日常工具，<br class="mobile-break">也记录产品与开发中的想法。</p>
-        </section>
-
         <section class="section" id="projects" aria-labelledby="projects-heading">
-          <h2 id="projects-heading">精选项目</h2>
-          <ul class="projects">
-            <li class="project">
-              <div class="project-copy">
-                <h3><a class="external" href="https://dota2.ai">Dota2.ai<span class="arrow" aria-hidden="true"></span></a></h3>
-                <p>从比赛事实出发，找到下一局的练习重点。</p>
+          <h2 id="projects-heading" class="section-title">精选项目 <span lang="en">Selected projects</span></h2>
+
+          <article class="card feature">
+            <figure class="window terminal">
+              <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>dota2ai — coach</span></div>
+<pre><span class="prompt">$</span> node …/dota2ai.js coach 9091400302 --hero spectre
+
+<span class="dim">#9091400302 · Dire victory 34–75 · 45:22</span>
+Spectre · Core · 12/15/9 · loss
+
+<span class="hl">Biggest lever:</span> no item answer to their magic burst.
+
+<span class="warn">1. !</span> No item answer to their magic burst
+   <span class="dim">Ask yourself:</span> which item slot could have
+   been Black King Bar instead?</pre>
+              <figcaption class="sr-only">Dota2.ai 命令行复盘示例输出（摘自项目 README）</figcaption>
+            </figure>
+            <div class="card-body">
+              <p class="kicker">AI 教练 · <span lang="en">Post-match coach</span></p>
+              <h3><a class="card-link external" href="https://dota2.ai">Dota2.ai<span class="arrow" aria-hidden="true"></span></a></h3>
+              <p class="en-line" lang="en">A post-match Dota 2 coach that shows its evidence.</p>
+              <p>粘贴比赛编号，选择你玩的英雄，得到两三件最值得改的事：每一条先向你提问，附上它依据的数据，也说明数据无法证明的部分。</p>
+              <div class="card-foot">
+                <ul class="tags" aria-label="技术">
+                  <li>TypeScript</li><li>CLI</li><li>API</li>
+                </ul>
+                <ul class="sub-links">
+                  <li><a class="external" href="https://dota2.ai/r/9091400302">示例复盘<span class="arrow" aria-hidden="true"></span></a></li>
+                  <li><a class="external" href="https://github.com/qianhaoq/dota2.ai">源码<span class="arrow" aria-hidden="true"></span></a></li>
+                </ul>
               </div>
-              <span class="project-type">AI 教练</span>
+            </div>
+          </article>
+
+          <article class="card feature">
+            <div class="window browser" aria-hidden="true">
+              <div class="window-bar"><i></i><i></i><i></i><span class="url">example.com/article</span></div>
+              <div class="page-mock">
+                <p class="src" lang="en">Progressive translation keeps the original paragraph in place.</p>
+                <p class="dst">渐进式翻译，原文段落保留在原处。</p>
+                <p class="src" lang="en">New content is translated as it loads.</p>
+                <p class="dst">新加载的内容会自动跟译。</p>
+                <span class="pill">已翻译 12 / 30 段</span>
+              </div>
+            </div>
+            <div class="card-body">
+              <p class="kicker">浏览器扩展 · <span lang="en">Chrome / Edge</span></p>
+              <h3><a class="card-link external" href="https://chromewebstore.google.com/detail/lmdbhjngjhlgbpmbjfffegjalchblpke">千浩翻译 <span lang="en">Kilocean Translate</span><span class="arrow" aria-hidden="true"></span></a></h3>
+              <p class="en-line" lang="en">Progressive, bilingual webpage translation with your own API key.</p>
+              <p>用你自己的 DeepSeek 或 Kimi API Key 渐进式翻译网页，按段落双语对照，并自动跟译新加载的内容。Key 只存在本机，无登录、无会员墙。</p>
+              <div class="card-foot">
+                <ul class="tags" aria-label="技术">
+                  <li>JavaScript</li><li>DeepSeek</li><li>Kimi</li>
+                </ul>
+                <ul class="sub-links">
+                  <li><a class="external" href="https://github.com/qianhaoq/kilocean-translate">源码<span class="arrow" aria-hidden="true"></span></a></li>
+                </ul>
+              </div>
+            </div>
+          </article>
+
+          <article class="card feature">
+            <div class="window duo" aria-hidden="true">
+              <div class="pane read">
+                <span class="pane-label">阅读</span>
+                <span class="ln h"></span><span class="ln"></span><span class="ln"></span><span class="ln mark"></span><span class="ln short"></span><span class="ln"></span><span class="ln"></span><span class="ln short"></span>
+              </div>
+              <div class="pane note">
+                <span class="pane-label">笔记</span>
+                <span class="ln h"></span><span class="ln"></span><span class="ln short"></span><span class="ln quote"></span><span class="ln"></span>
+              </div>
+            </div>
+            <div class="card-body">
+              <p class="kicker">阅读与笔记 · <span lang="en">Read &amp; note</span></p>
+              <h3>DuoRead</h3>
+              <p class="en-line" lang="en">Local Markdown / PDF reading and notes.</p>
+              <p>本地 Markdown / PDF 阅读与笔记。无账号、无网络请求。</p>
+              <div class="card-foot">
+                <ul class="tags" aria-label="特点">
+                  <li>本地</li><li>无账号</li>
+                </ul>
+                <ul class="sub-links">
+                  <li><a class="external" href="https://qianhaoq.github.io/duoread-site/" aria-label="DuoRead 隐私与支持">隐私与支持<span class="arrow" aria-hidden="true"></span></a></li>
+                </ul>
+              </div>
+            </div>
+          </article>
+
+          <h3 class="subhead">更多产品 <span lang="en">More products</span></h3>
+          <ul class="row-list">
+            <li class="row">
+              <a class="row-link external" href="https://pinhaoyun.com"><span class="row-name">拼好运 · 好运贴<span class="arrow" aria-hidden="true"></span></span><span class="row-desc">每日撕日历的微信小程序：一句小话、一个小动作和一枚贴纸。</span></a>
             </li>
-            <li class="project">
-              <div class="project-copy">
-                <h3><a class="external" href="https://chromewebstore.google.com/detail/lmdbhjngjhlgbpmbjfffegjalchblpke">千浩翻译<span class="arrow" aria-hidden="true"></span></a></h3>
-                <p>渐进式双语网页翻译，保留原文阅读体验。</p>
-              </div>
-              <span class="project-type">浏览器扩展</span>
-            </li>
-            <li class="project">
-              <div class="project-copy">
-                <h3>DuoRead</h3>
-                <p>本地 Markdown / PDF 阅读与笔记。</p>
-              </div>
-              <a class="project-destination external" href="https://qianhaoq.github.io/duoread-site/" aria-label="DuoRead 隐私与支持">隐私与支持<span class="arrow" aria-hidden="true"></span></a>
+            <li class="row">
+              <a class="row-link external" href="https://jobs.qianhao.ai"><span class="row-name">求职聚合<span class="arrow" aria-hidden="true"></span></span><span class="row-desc">面向中文开发者与 AI 从业者的远程、兼职岗位聚合。</span></a>
             </li>
           </ul>
-          <details class="more-projects">
-            <summary>更多项目<span class="disclosure-icon" aria-hidden="true"></span></summary>
-            <ul class="project-index">
-              <li><a href="https://pinhaoyun.com"><span class="index-name">拼好运 · 好运贴<span class="arrow" aria-hidden="true"></span></span><span class="index-description">一页日历，一张好运贴。</span></a></li>
-              <li><a href="https://jobs.qianhao.ai"><span class="index-name">求职聚合<span class="arrow" aria-hidden="true"></span></span><span class="index-description">汇集远程与兼职岗位。</span></a></li>
-              <li><a href="https://github.com/qianhaoq/qh-personal-agent"><span class="index-name">个人 Agent<span class="arrow" aria-hidden="true"></span></span><span class="index-description">语音记事与个人助手探索。</span></a></li>
-              <li><a href="https://github.com/qianhaoq/qh-dsh-dota-coach"><span class="index-name">DSH Dota 教练插件<span class="arrow" aria-hidden="true"></span></span><span class="index-description">DeepSeek Harness 的教练插件。</span></a></li>
-            </ul>
-          </details>
         </section>
 
-        <section class="section writing" id="writing" aria-labelledby="writing-heading">
-          <h2 id="writing-heading">写作与记录</h2>
-          <ul class="writing-list">
-            <li><a href="https://qianhaoq.github.io/"><span class="writing-name">个人博客<span class="arrow" aria-hidden="true"></span></span><span class="writing-description">产品、技术与日常探索。</span></a></li>
-            <li><a href="https://qianhaoq.github.io/ai-devflow-weekly/"><span class="writing-name" lang="en">AI DevFlow Weekly<span class="arrow" aria-hidden="true"></span></span><span class="writing-description">AI 开发工具与工作流。</span></a></li>
+        <section class="section" id="now" aria-labelledby="now-heading">
+          <h2 id="now-heading" class="section-title">近期在做 <span lang="en">Now</span></h2>
+          <p class="section-note">更新于 <time datetime="2026-11">2026 年 11 月</time>，依据 GitHub 上的近期提交。</p>
+          <ol class="timeline">
+            <li>
+              <a class="external" href="https://github.com/qianhaoq/dota2.ai">Dota2.ai<span class="arrow" aria-hidden="true"></span></a>
+              <p>继续打磨赛后教练：命令行、网页与给脚本和 Agent 调用的 API。</p>
+            </li>
+            <li>
+              <a class="external" href="https://github.com/qianhaoq/qh-dsh-dota-coach">DSH Dota 教练插件<span class="arrow" aria-hidden="true"></span></a>
+              <p>DeepSeek Harness 插件：基于录像证据复盘，用本地 MemOS 记忆积累经验，每次只练一个目标。</p>
+            </li>
+            <li>
+              <a class="external" href="https://github.com/qianhaoq/qh-personal-agent">个人语音 Agent<span class="arrow" aria-hidden="true"></span></a>
+              <p>语音记事与语音助手，Android Kotlin + FastAPI。</p>
+            </li>
+            <li>
+              <a class="external" href="https://github.com/qianhaoq/ai-devflow-weekly"><span lang="en">AI DevFlow Weekly</span><span class="arrow" aria-hidden="true"></span></a>
+              <p>每日抓取 AI 编程工具的官方 changelog，起草中文摘要，人工核实后发布为周刊。</p>
+            </li>
+          </ol>
+        </section>
+
+        <section class="section" id="open-source" aria-labelledby="oss-heading">
+          <h2 id="oss-heading" class="section-title">开源工具 <span lang="en">Open source</span></h2>
+          <ul class="grid">
+            <li class="card mini">
+              <h3><a class="card-link external" href="https://github.com/qianhaoq/codex-usage" lang="en">codex-usage<span class="arrow" aria-hidden="true"></span></a></h3>
+              <p>Codex CLI 的 token 用量统计，直接读取本地 SQLite，零依赖。</p>
+              <span class="lang"><i class="lang-dot py" aria-hidden="true"></i>Python</span>
+            </li>
+            <li class="card mini">
+              <h3><a class="card-link external" href="https://github.com/qianhaoq/codexignore-gen" lang="en">codexignore-gen<span class="arrow" aria-hidden="true"></span></a></h3>
+              <p>为 Codex CLI 生成 <code>.codexignore</code> 模板，可按项目技术栈自动识别。</p>
+              <span class="lang"><i class="lang-dot py" aria-hidden="true"></i>Python</span>
+            </li>
+            <li class="card mini">
+              <h3><a class="card-link external" href="https://github.com/qianhaoq/devflow-gates" lang="en">devflow-gates<span class="arrow" aria-hidden="true"></span></a></h3>
+              <p>可复用的 GitHub Actions 门禁：CI、密钥扫描、Codex 评审、人工 QA、自动合并与部署后冒烟。</p>
+              <span class="lang"><i class="lang-dot js" aria-hidden="true"></i>JavaScript</span>
+            </li>
+            <li class="card mini">
+              <h3><a class="card-link external" href="https://github.com/qianhaoq/qh-dsh-weixin">DSH 微信插件<span class="arrow" aria-hidden="true"></span></a></h3>
+              <p>通过微信 ClawBot 的 iLink Bot API，在微信里给本机 DeepSeek Harness 发任务并接收回复。</p>
+              <span class="lang"><i class="lang-dot ts" aria-hidden="true"></i>TypeScript</span>
+            </li>
           </ul>
         </section>
+
+        <section class="section" id="writing" aria-labelledby="writing-heading">
+          <h2 id="writing-heading" class="section-title">写作 <span lang="en">Writing</span></h2>
+          <ul class="row-list">
+            <li class="row">
+              <a class="row-link external" href="https://qianhaoq.github.io/"><span class="row-name">个人博客<span class="arrow" aria-hidden="true"></span></span><span class="row-desc">AI Coding、工程实践与产品思考。</span></a>
+            </li>
+            <li class="row">
+              <a class="row-link external" href="https://qianhaoq.github.io/ai-devflow-weekly/"><span class="row-name" lang="en">AI DevFlow Weekly<span class="arrow" aria-hidden="true"></span></span><span class="row-desc">中文 AI 研发工作流资讯周刊：Cursor、Copilot、Claude Code、Codex 等工具的官方更新。</span></a>
+            </li>
+          </ul>
+        </section>
+
+        <footer class="site-footer">
+          <p>© 2026 钱浩 · <span lang="en">qianhao.ai</span></p>
+          <a href="#main">回到顶部<span class="up-arrow" aria-hidden="true"></span></a>
+        </footer>
       </main>
-      <footer class="site-footer">
-        <p>钱浩<span aria-hidden="true"> / </span><span lang="en">qianhao.ai</span></p>
-        <a href="#main">回到顶部<span class="up-arrow" aria-hidden="true"></span></a>
-      </footer>
     </div>
   </body>
 </html>
