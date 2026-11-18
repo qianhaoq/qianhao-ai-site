@@ -26,8 +26,10 @@ python3 -c "import hashlib; print(hashlib.sha256(open('styles.css','rb').read())
 
 - 页面需同时在 GitHub Pages 项目子路径（`qianhaoq.github.io/qianhao-ai-site/`）和域名根路径下工作，所以样式与首页链接都用相对路径（`styles.css`、`./`），不要改成以 `/` 开头。
 - canonical、`og:url`、`sitemap.xml`、`robots.txt` 指向 `https://qianhao.ai/`。
-- 页面结构：≥1024px 为两栏，左栏 `.profile` sticky（简介、页内导航、外链），右栏依次为精选项目卡片（Dota2.ai、千浩翻译、DuoRead，每张带纯 CSS 示意窗）→ 更多产品 → 近期 Now → 开源工具 → 写作；<1024px 单栏。不使用 JS，导航高亮靠 `:has(:target)`。
+- 页面结构：≥1024px 两栏，左栏 `.side` sticky（印章字标、00 写在前面、近期 2 条、外链），右栏 `main` 为 01 作品（Dota2.ai、千浩翻译两张卡片，带纯 CSS 示意窗）→ 02 更多（`.index` 索引表，含其他产品与开源工具）→ 03 写作（周刊最近 3 期 + 博客入口）；<1024px 单栏，按 DOM 顺序排列，不要用 `order` 让视觉顺序和 Tab 顺序不一致。
 - 整卡可点：卡片标题 `.card-link::after` 覆盖整卡，卡内其他链接（`.sub-links`）和终端示意窗用 `z-index: 1` 浮在覆盖层之上。
+- `index.md` 是首页的 Markdown 版，改首页文字或链接时同步改它。
+- 视觉记号是朱红印章（`.seal`），全站只有一个强调色 `--accent`；不加逐行英文副标题。
 - 内容只取公开来源（公开仓库 README、已上线站点）；私有仓库不展示细节。“近期 Now”带更新日期，改内容时同步更新。
 - 外链箭头由 CSS 绘制（`.external` + `<span class="arrow" aria-hidden="true">`）；DuoRead 链接标注为“隐私与支持”，不要当作产品入口。
 - 无障碍要求需保持：跳到正文链接、可见焦点、`prefers-reduced-motion`、可见文字与可访问名称一致（不要用 `aria-label` 覆盖掉可见标签文字）。
