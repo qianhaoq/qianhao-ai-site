@@ -87,6 +87,8 @@ grep -o 'href="https[^"]*"' index.html | sort -u | cut -d'"' -f2 \
 
 只替换静态文件即可，不需要改 DNS、证书或 nginx 配置，也不需要重启服务。上一次正式发布的记录与回滚方法见 PR #2。
 
+**当前状态（2026-11-18）**：`main` 已是本次作品集卡片式改版（PR #5），但正式站仍是 PR #1 的版本（`a780087`），PR #4 和 PR #5 都还没有发布。发布需要一台能 SSH 到服务器的机器，按上面的步骤操作。
+
 GitHub Pages 预览地址 <https://qianhaoq.github.io/qianhao-ai-site/> 目前返回 404，仓库没有开启 Pages。
 
 修改 DNS、证书、服务器或购买 AWS 资源都需要钱浩确认。
