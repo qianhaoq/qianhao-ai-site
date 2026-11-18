@@ -1,0 +1,16 @@
+name: Site checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Local publisher and SSH tests
+        run: bash deploy/tests/run.sh
+      - name: Static artifact sanity (independent of production)
+        run: |
+          for file in index.html styles.css index.md robots.txt sitemap.xml; do
+            test -f "$file" && test -s "$file" || exit 1
+          done

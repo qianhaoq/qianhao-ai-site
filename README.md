@@ -107,56 +107,31 @@ grep -o 'href="https[^"]*"' index.html | sort -u | cut -d'"' -f2 \
 
 ## 发布到正式站
 
-正式站跑在 AWS Lightsail（东京）的 nginx 上，网站文件放在服务器的 `/var/www/qianhao.ai`。
+正式站跑在 AWS Lightsail（东京）的 nginx 上，网站根目录为 `/var/www/qianhao.ai`，备份放在 `/var/www/backups/`。
 
-**合并到 `main` 不会自动更新正式站**，仓库里也没有自动发布流程，需要在能 SSH 到服务器的机器上手动发布。只替换静态文件，不需要改 DNS、证书或 nginx 配置，也不用重启服务。
+完成 [一次性服务器设置](deploy/server-setup.md) 并配置仓库 secret `DEPLOY_SSH_KEY` 后，推送到 `main` 会通过 GitHub Actions 自动发布。PR 只跑本地检查，不发布。工作流下载触发提交 SHA 的归档，无构建，只发布 `index.html`、`styles.css`、`index.md`、`robots.txt`、`sitemap.xml`；排队期间已被新提交取代的任务会成功跳过。不会删除已有的 `assets/` 等额外文件，也不用重启 nginx。
 
-在本仓库的 `main` 分支下运行（把 `user` 换成服务器上的用户名）：
+发布前完整备份到 `/var/www/backups/qianhao.ai-pre-<sha>-<北京时间 YYYYMMDD-HHMMSS>`，先替换样式，再替换其余四个文件，权限均为 644。服务器核对五个文件的 SHA-256，失败自动恢复；CI 随后从公网 HTTPS 检查状态码和正文哈希（包括首页及带版本号的样式 URL），失败会请求回滚并标记发布失败。
 
-```sh
-git pull
-SERVER=user@43.207.221.125
-
-# 1. 把五个文件传到服务器的临时目录
-ssh $SERVER 'mkdir -p ~/qianhao-release'
-scp styles.css index.html index.md robots.txt sitemap.xml $SERVER:~/qianhao-release/
-
-# 2. 先备份线上文件，再替换（先换样式，再换页面）
-ssh $SERVER 'set -e
-  B=/var/backups/qianhao.ai/pre-$(date -u +%Y%m%dT%H%M%SZ)
-  sudo mkdir -p "$B" && sudo cp -a /var/www/qianhao.ai/. "$B"/
-  cd ~/qianhao-release
-  sudo install -m 644 styles.css /var/www/qianhao.ai/
-  sudo install -m 644 index.html index.md robots.txt sitemap.xml /var/www/qianhao.ai/
-  echo "备份在 $B"'
-
-# 3. 从公网核对：每行应为 200，且线上与本地的哈希一致
-for f in index.html index.md styles.css robots.txt sitemap.xml; do
-  printf '%s  ' "$(curl -s -o /dev/null -w '%{http_code}' https://qianhao.ai/$f)"
-  printf '线上 %s  ' "$(curl -s https://qianhao.ai/$f | sha256sum | cut -c1-12)"
-  echo "本地 $(sha256sum $f | cut -c1-12)  $f"
-done
-```
-
-nginx 默认的 MIME 表里没有 `.md`，`index.md` 可能会被当成下载文件。第一次发布后检查 `curl -sI https://qianhao.ai/index.md` 的 `Content-Type`；如果不是 `text/markdown` 或 `text/plain`，需要在 nginx 配置里加一条 `types { text/markdown md; }`。这属于服务器配置改动，需要钱浩确认。
-
-最后用手机打开 <https://qianhao.ai/> 看一遍。如果还是旧页面，先强制刷新再看。
-
-**回滚**：第 2 步会打印备份目录，把里面的文件拷回去即可：
+手动发布也使用相同入口。在要发布的提交下运行（密钥必须是专用部署密钥，主机密钥使用仓库固定值）：
 
 ```sh
-ssh $SERVER 'sudo cp -a <备份目录>/. /var/www/qianhao.ai/'
+SHA=$(git rev-parse HEAD)
+git archive "$SHA" index.html styles.css index.md robots.txt sitemap.xml |
+  ssh -i /path/to/deploy-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+    -o UserKnownHostsFile=deploy/known_hosts -o BatchMode=yes \
+    qianhao-deploy@43.207.221.125 "publish $SHA"
 ```
 
-更早一次正式发布的完整记录和回滚脚本见 PR #2。
+保存输出中的 `BACKUP=` 路径。需要回滚时，使用相同 SSH 选项，将远端命令改为 `rollback qianhao.ai-pre-<sha>-<stamp>`。回滚只恢复五个站点文件，不清除额外资产。手动发布后也需核对公网正文哈希，并用手机打开 <https://qianhao.ai/> 检查。
 
-修改 DNS、证书或服务器配置，或者购买 AWS 资源，都需要钱浩确认。
+nginx 默认 MIME 表可能不包含 `.md`。检查 `curl -sI https://qianhao.ai/index.md` 的 `Content-Type`；如需改为 `text/markdown` 或 `text/plain`，应由操作员核实服务器实际配置。`deploy/nginx.conf.example` 和 `deploy/Caddyfile.example` 只是示例，不是线上配置。
 
-### 发布状态
-
-截至 2026-11-18，`main` 上是印章 + 索引版首页（PR #8），正式站还停留在 PR #1 的版本（`a780087`），尚未发布。发布完成后请更新这一段。
+自动发布只在完成一次性服务器设置、配置好 `DEPLOY_SSH_KEY`、并且本工作流已合入 `main` 之后才会触发。在 GitHub Actions 首次成功运行、且公网文件哈希与该提交产物一致之前，不要默认正式站已经自动更新。
 
 GitHub Pages（<https://qianhaoq.github.io/qianhao-ai-site/>）目前没有开启，访问会返回 404。
+
+生产切流、修改 DNS、证书或服务器配置，以及购买 AWS 资源，仍须钱浩确认。
 
 ## 设计取舍
 
