@@ -125,9 +125,11 @@ git archive "$SHA" index.html styles.css index.md robots.txt sitemap.xml |
 
 保存输出中的 `BACKUP=` 路径。需要回滚时，使用相同 SSH 选项，将远端命令改为 `rollback qianhao.ai-pre-<sha>-<stamp>`。回滚只恢复五个站点文件，不清除额外资产。手动发布后也需核对公网正文哈希，并用手机打开 <https://qianhao.ai/> 检查。
 
-nginx 默认 MIME 表可能不包含 `.md`。检查 `curl -sI https://qianhao.ai/index.md` 的 `Content-Type`；如需改为 `text/markdown` 或 `text/plain`，应由操作员核实服务器实际配置。`deploy/nginx.conf.example` 和 `deploy/Caddyfile.example` 只是示例，不是线上配置。
+nginx 默认 MIME 表可能不包含 `.md`。当前正式站已返回 `Content-Type: text/markdown`（2026-11-18 核对）；换服务器或改 nginx 配置后，用 `curl -sI https://qianhao.ai/index.md` 复查。`deploy/nginx.conf.example` 和 `deploy/Caddyfile.example` 只是示例，不是线上配置。
 
-自动发布只在完成一次性服务器设置、配置好 `DEPLOY_SSH_KEY`、并且本工作流已合入 `main` 之后才会触发。在 GitHub Actions 首次成功运行、且公网文件哈希与该提交产物一致之前，不要默认正式站已经自动更新。
+自动发布只在完成一次性服务器设置、配置好 `DEPLOY_SSH_KEY`、并且本工作流已合入 `main` 之后才会触发。
+
+**发布状态**：2026-11-18，`4c48953`（PR #9）推送后，[Deploy production](https://github.com/qianhaoq/qianhao-ai-site/actions/runs/44354833880) 首次运行成功。公网五个站点文件均返回 200，正文哈希与 `main` 一致，即 PR #8 的印章 + 索引版首页已上线。
 
 GitHub Pages（<https://qianhaoq.github.io/qianhao-ai-site/>）目前没有开启，访问会返回 404。
 
